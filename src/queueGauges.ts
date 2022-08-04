@@ -1,7 +1,7 @@
-import bull from 'bull';
-import { Gauge, Registry, Summary } from 'prom-client';
+import bull from "bull";
+import { Gauge, Registry, Summary } from "prom-client";
 
-type LabelsT = 'queue' | 'prefix';
+type LabelsT = "queue" | "prefix";
 export interface QueueGauges {
   completed: Gauge<LabelsT>;
   active: Gauge<LabelsT>;
@@ -9,52 +9,67 @@ export interface QueueGauges {
   failed: Gauge<LabelsT>;
   waiting: Gauge<LabelsT>;
   completeSummary: Summary<LabelsT>;
+  workers: Gauge<LabelsT>;
 }
 
-export function makeGuages(statPrefix: string, registers: Registry[]): QueueGauges {
+export function makeGuages(
+  statPrefix: string,
+  registers: Registry[]
+): QueueGauges {
   return {
     completed: new Gauge({
       registers,
       name: `${statPrefix}completed`,
-      help: 'Number of completed messages',
-      labelNames: ['queue', 'prefix'],
+      help: "Number of completed messages",
+      labelNames: ["queue", "prefix"],
     }),
     completeSummary: new Summary({
       registers,
       name: `${statPrefix}complete_duration`,
-      help: 'Time to complete jobs',
-      labelNames: ['queue', 'prefix'],
+      help: "Time to complete jobs",
+      labelNames: ["queue", "prefix"],
       maxAgeSeconds: 300,
       ageBuckets: 13,
     }),
     active: new Gauge({
       registers,
       name: `${statPrefix}active`,
-      help: 'Number of active messages',
-      labelNames: ['queue', 'prefix'],
+      help: "Number of active messages",
+      labelNames: ["queue", "prefix"],
     }),
     delayed: new Gauge({
       registers,
       name: `${statPrefix}delayed`,
-      help: 'Number of delayed messages',
-      labelNames: ['queue', 'prefix'],
+      help: "Number of delayed messages",
+      labelNames: ["queue", "prefix"],
     }),
     failed: new Gauge({
       registers,
       name: `${statPrefix}failed`,
-      help: 'Number of failed messages',
-      labelNames: ['queue', 'prefix'],
+      help: "Number of failed messages",
+      labelNames: ["queue", "prefix"],
     }),
     waiting: new Gauge({
       registers,
       name: `${statPrefix}waiting`,
-      help: 'Number of waiting messages',
-      labelNames: ['queue', 'prefix'],
+      help: "Number of waiting messages",
+      labelNames: ["queue", "prefix"],
+    }),
+    workers: new Gauge({
+      registers,
+      name: `${statPrefix}workers`,
+      help: "Number of workers",
+      labelNames: ["queue", "prefix"],
     }),
   };
 }
 
-export async function getJobCompleteStats(prefix: string, name: string, job: bull.Job, gauges: QueueGauges): Promise<void> {
+export async function getJobCompleteStats(
+  prefix: string,
+  name: string,
+  job: bull.Job,
+  gauges: QueueGauges
+): Promise<void> {
   if (!job.finishedOn) {
     return;
   }
@@ -62,12 +77,22 @@ export async function getJobCompleteStats(prefix: string, name: string, job: bul
   gauges.completeSummary.observe({ prefix, queue: name }, duration);
 }
 
-export async function getStats(prefix: string, name: string, queue: bull.Queue, gauges: QueueGauges): Promise<void> {
-  const { completed, active, delayed, failed, waiting } = await queue.getJobCounts();
+export async function getStats(
+  prefix: string,
+  name: string,
+  queue: bull.Queue,
+  gauges: QueueGauges
+): Promise<void> {
+  const { completed, active, delayed, failed, waiting } =
+    await queue.getJobCounts();
+  const workerCount = await queue.getWorkers();
 
   gauges.completed.set({ prefix, queue: name }, completed);
   gauges.active.set({ prefix, queue: name }, active);
   gauges.delayed.set({ prefix, queue: name }, delayed);
   gauges.failed.set({ prefix, queue: name }, failed);
   gauges.waiting.set({ prefix, queue: name }, waiting);
+  gauges.workers.set({ prefix, queue: name }, workerCount.length);
 }
+
+export async function getWorkerStats() {}
